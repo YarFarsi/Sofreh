@@ -1,6 +1,6 @@
 {
   "name": "food-reservation",
-  "version": "0.1.0",
+  "version": "0.3.0",
   "private": false,
   "license": "MIT",
   "description": "Air-gapped Persian RTL on-premise food reservation system",
@@ -31,6 +31,7 @@
     "lucide-react": "^1.38.0",
     "next": "16.3.3",
     "node-cron": "^4.6.0",
+    "nodemailer": "^9.0.6",
     "prisma": "6.19.0",
     "qrcode": "^1.5.4",
     "react": "19.2.8",
@@ -45,6 +46,7 @@
     "@types/jalaali-js": "^1.2.0",
     "@types/node": "^20",
     "@types/node-cron": "^3.0.11",
+    "@types/nodemailer": "^8.0.1",
     "@types/qrcode": "^1.5.6",
     "@types/react": "^19",
     "@types/react-dom": "^19",

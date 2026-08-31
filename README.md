@@ -13,6 +13,8 @@ Do **not** use these passwords in production.
 | Admin | `admin@example.local` | `ChangeMe-Admin-0!` |
 | User | `user@example.local` | `ChangeMe-User-0!` |
 | Pending user | `pending@example.local` | `ChangeMe-Pending-0!` |
+| Branch admin (north only) | `branch@example.local` | `ChangeMe-Branch-0!` |
+| Accountant | `accountant@example.local` | `ChangeMe-Account-0!` |
 
 Pending user must be approved in **مدیریت → کاربران**.
 

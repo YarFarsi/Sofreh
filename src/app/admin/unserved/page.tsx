@@ -6,14 +6,17 @@ import { utcDateToCivil } from "@/lib/time/civil";
 import { MEAL_LABEL } from "@/lib/labels";
 import { formatRial } from "@/lib/money";
 
+import { branchWhere } from "@/lib/auth/branches";
+
 export const dynamic = "force-dynamic";
 
 export default async function UnservedPage() {
-  await requirePermission("reports.view");
+  const user = await requirePermission("reports.view");
   const rows = await prisma.reservation.findMany({
-    where: { status: "NOT_SERVED" },
+    where: { status: "NOT_SERVED", ...branchWhere(user) },
     include: {
       user: true,
+      branch: true,
       menuItem: { include: { food: true } },
     },
     orderBy: [{ serviceDate: "desc" }, { mealKind: "asc" }],
@@ -31,6 +34,7 @@ export default async function UnservedPage() {
               <th className="p-2 text-right">تاریخ</th>
               <th className="p-2 text-right">وعده</th>
               <th className="p-2 text-right">غذا</th>
+              <th className="p-2 text-right">شعبه</th>
               <th className="p-2 text-right">هزینه</th>
             </tr>
           </thead>
@@ -54,6 +58,7 @@ export default async function UnservedPage() {
                 <td className="p-2">{formatJalaliLong(utcDateToCivil(r.serviceDate))}</td>
                 <td className="p-2">{MEAL_LABEL[r.mealKind]}</td>
                 <td className="p-2">{r.menuItem.food.titleFa}</td>
+                <td className="p-2">{r.branch.nameFa}</td>
                 <td className="p-2">{formatRial(r.employeePrice)}</td>
               </tr>
             ))}

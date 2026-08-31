@@ -12,6 +12,7 @@ export default async function ProfilePage() {
     where: { id: session.id },
     include: { department: true },
   });
+  const branches = await prisma.branch.findMany({ where: { active: true } });
   return (
     <>
       <AppHeader user={session} />
@@ -42,6 +43,24 @@ export default async function ProfilePage() {
             </label>
             <SubmitButton>ذخیره</SubmitButton>
           </AuthForm>
+          <form action={async (fd) => {
+            "use server";
+            const { setDefaultBranchAction } = await import("@/app/actions/reservations");
+            await setDefaultBranchAction(String(fd.get("defaultBranchId") || ""));
+          }} className="mt-4">
+            <label className="block text-sm">
+              شعبه پیش‌فرض دریافت
+              <select className="field mt-1" name="defaultBranchId" defaultValue={user.defaultBranchId ?? ""}>
+                <option value="">—</option>
+                {(branches).map((b) => (
+                  <option key={b.id} value={b.id}>
+                    {b.nameFa}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button className="btn btn-ghost mt-2" type="submit">ذخیره شعبه</button>
+          </form>
           <p className="mt-3 text-sm text-muted">واحد: {user.department?.nameFa ?? "—"}</p>
         </div>
       </main>

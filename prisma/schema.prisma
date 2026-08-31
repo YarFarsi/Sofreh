@@ -57,10 +57,47 @@ model RolePermission {
 }
 
 model Department {
-  id     String @id @default(cuid())
-  nameFa String
-  slug   String @unique
-  users  User[]
+  id          String       @id @default(cuid())
+  nameFa      String
+  slug        String       @unique
+  users       User[]
+  costCenters CostCenter[]
+}
+
+model CostCenter {
+  id           String      @id @default(cuid())
+  nameFa       String
+  slug         String      @unique
+  departmentId String?
+  department   Department? @relation(fields: [departmentId], references: [id])
+  users        User[]
+}
+
+model Branch {
+  id           String                 @id @default(cuid())
+  nameFa       String
+  slug         String                 @unique
+  address      String                 @default("")
+  contact      String                 @default("")
+  active       Boolean                @default(true)
+  waitlistEnabled Boolean?
+  createdAt    DateTime               @default(now())
+  updatedAt    DateTime               @updatedAt
+  users        User[]                 @relation("UserDefaultBranch")
+  branchUsers  BranchUser[]
+  reservations Reservation[]
+  capacities   MenuItemBranchCapacity[]
+  orgDefaults  OrganizationSetting[]  @relation("OrgDefaultBranch")
+}
+
+model BranchUser {
+  branchId String
+  userId   String
+  branch   Branch @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([branchId, userId])
+  @@index([userId])
 }
 
 model User {
@@ -71,6 +108,10 @@ model User {
   mobile         String?
   departmentId   String?
   department     Department?    @relation(fields: [departmentId], references: [id])
+  costCenterId   String?
+  costCenter     CostCenter?    @relation(fields: [costCenterId], references: [id])
+  defaultBranchId String?
+  defaultBranch  Branch?        @relation("UserDefaultBranch", fields: [defaultBranchId], references: [id])
   passwordHash   String
   status         UserStatus     @default(PENDING)
   photoPath      String?
@@ -84,6 +125,8 @@ model User {
   auditLogs      AuditLog[]     @relation("AuditActor")
   servedMeals    Reservation[]  @relation("ServedBy")
   actedEvents    ReservationEvent[] @relation("EventActor")
+  branchAccess   BranchUser[]
+  ratings        FoodRating[]
 }
 
 model Session {
@@ -109,6 +152,8 @@ model OrganizationSetting {
   waitlistEnabled         Boolean @default(true)
   capacityStrict          Boolean @default(true)
   orgNameFa               String  @default("سامانه رزرو غذا")
+  defaultBranchId         String?
+  defaultBranch           Branch? @relation("OrgDefaultBranch", fields: [defaultBranchId], references: [id])
 }
 
 model MealSchedule {
@@ -141,6 +186,7 @@ model Food {
   active          Boolean    @default(true)
   deletedAt       DateTime?
   menuItems       MenuItem[]
+  ratings         FoodRating[]
   createdAt       DateTime   @default(now())
   updatedAt       DateTime   @updatedAt
 }
@@ -159,6 +205,7 @@ model MenuItem {
   capacity      Int?
   active        Boolean        @default(true)
   reservations  Reservation[]
+  branchCaps    MenuItemBranchCapacity[]
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
 
@@ -184,14 +231,19 @@ model Reservation {
   servedBy         User?              @relation("ServedBy", fields: [servedById], references: [id])
   actorUserId      String?
   cancelReason     String?
+  changeReason     String?
+  branchId         String
+  branch           Branch             @relation(fields: [branchId], references: [id])
   createdAt        DateTime           @default(now())
   updatedAt        DateTime           @updatedAt
   ticket           MealTicket?
   events           ReservationEvent[]
+  rating           FoodRating?
 
   @@index([userId, serviceDate])
   @@index([menuItemId, status])
   @@index([status, serviceDate, mealKind])
+  @@index([branchId, status])
 }
 
 model ReservationEvent {
@@ -253,4 +305,29 @@ model AuditLog {
   @@index([entity, entityId])
   @@index([createdAt])
   @@index([actorId])
+}
+
+model MenuItemBranchCapacity {
+  menuItemId String
+  branchId   String
+  capacity   Int?
+  menuItem   MenuItem @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
+  branch     Branch   @relation(fields: [branchId], references: [id], onDelete: Cascade)
+
+  @@id([menuItemId, branchId])
+}
+
+model FoodRating {
+  id            String       @id @default(cuid())
+  reservationId String       @unique
+  reservation   Reservation  @relation(fields: [reservationId], references: [id], onDelete: Cascade)
+  userId        String
+  user          User         @relation(fields: [userId], references: [id])
+  foodId        String
+  food          Food         @relation(fields: [foodId], references: [id])
+  rating        Int
+  comment       String?
+  createdAt     DateTime     @default(now())
+
+  @@index([foodId])
 }

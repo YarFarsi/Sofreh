@@ -5,6 +5,8 @@ import { writeAudit } from "@/lib/audit";
 import { utcDateToCivil } from "@/lib/time/civil";
 import { isWithinMealWindow } from "@/lib/time/meal-window";
 import { log } from "@/lib/logger";
+import { assertBranchAccess } from "@/lib/auth/branches";
+import type { SessionUser } from "@/lib/auth/session";
 
 export type TicketPreview = {
   reservationId: string;
@@ -16,11 +18,15 @@ export type TicketPreview = {
   mealLabel: string;
   serviceDate: Date;
   status: string;
+  branchId: string;
+  branchName: string;
 };
 
 export async function previewTicket(
   rawToken: string,
   now = new Date(),
+  servingBranchId?: string,
+  actor?: SessionUser,
 ): Promise<TicketPreview> {
   const ticket = await prisma.mealTicket.findUnique({
     where: { tokenHash: sha256(rawToken) },
@@ -28,6 +34,7 @@ export async function previewTicket(
       reservation: {
         include: {
           user: true,
+          branch: true,
           menuItem: { include: { food: true } },
         },
       },
@@ -47,6 +54,16 @@ export async function previewTicket(
     throw new AppError(
       ErrorCodes.ALREADY_SERVED,
       "این غذا قبلاً تحویل شده است.",
+    );
+  }
+
+  if (actor) {
+    assertBranchAccess(actor, r.branchId);
+  }
+  if (servingBranchId && servingBranchId !== r.branchId) {
+    throw new AppError(
+      ErrorCodes.WRONG_BRANCH,
+      "این بلیت متعلق به شعبه دیگری است.",
     );
   }
 
@@ -85,17 +102,26 @@ export async function previewTicket(
     mealLabel: schedule.labelFa,
     serviceDate: r.serviceDate,
     status: r.status,
+    branchId: r.branchId,
+    branchName: r.branch.nameFa,
   };
 }
 
 export async function serveTicket(input: {
   rawToken: string;
   actorId: string;
+  actor?: SessionUser;
+  servingBranchId?: string;
   ip?: string | null;
   now?: Date;
 }): Promise<TicketPreview> {
   const now = input.now ?? new Date();
-  const preview = await previewTicket(input.rawToken, now);
+  const preview = await previewTicket(
+    input.rawToken,
+    now,
+    input.servingBranchId,
+    input.actor,
+  );
 
   const result = await prisma.$transaction(async (tx) => {
     const updated = await tx.reservation.updateMany({
@@ -103,6 +129,7 @@ export async function serveTicket(input: {
         id: preview.reservationId,
         status: "RESERVED",
         servedAt: null,
+        branchId: preview.branchId,
       },
       data: {
         status: "SERVED",
@@ -121,7 +148,7 @@ export async function serveTicket(input: {
         reservationId: preview.reservationId,
         actorUserId: input.actorId,
         action: "serve",
-        after: { status: "SERVED" },
+        after: { status: "SERVED", branchId: preview.branchId },
       },
     });
     await writeAudit(
@@ -130,7 +157,7 @@ export async function serveTicket(input: {
         action: "meal.serve",
         entity: "Reservation",
         entityId: preview.reservationId,
-        after: { status: "SERVED" },
+        after: { status: "SERVED", branchId: preview.branchId },
         ip: input.ip,
       },
       tx,

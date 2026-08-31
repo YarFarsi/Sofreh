@@ -26,6 +26,10 @@ export const PERMISSIONS = [
   "settings.update",
   "audit.view",
   "holidays.manage",
+  "branches.view",
+  "branches.manage",
+  "finance.view",
+  "ratings.create",
 ] as const;
 
 export type PermissionSlug = (typeof PERMISSIONS)[number];
@@ -37,6 +41,25 @@ export const USER_PERMISSIONS: PermissionSlug[] = [
   "reservations.create",
   "reservations.update",
   "reservations.cancel",
+  "ratings.create",
+];
+
+export const BRANCH_ADMIN_PERMISSIONS: PermissionSlug[] = [
+  "foods.view",
+  "menus.view",
+  "reservations.view",
+  "meals.scan",
+  "meals.serve",
+  "reports.view",
+  "reports.export",
+  "branches.view",
+];
+
+export const ACCOUNTANT_PERMISSIONS: PermissionSlug[] = [
+  "reports.view",
+  "reports.export",
+  "finance.view",
+  "foods.view",
 ];
 
 export const ADMIN_PERMISSIONS: PermissionSlug[] = [...PERMISSIONS];

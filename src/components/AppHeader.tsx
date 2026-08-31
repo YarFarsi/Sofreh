@@ -25,9 +25,13 @@ export function AppHeader({ user }: { user: SessionUser }) {
               تحویل غذا
             </Link>
           )}
-          {can(user, "users.view") && (
+          {(can(user, "users.view") ||
+            can(user, "reports.view") ||
+            can(user, "finance.view") ||
+            can(user, "meals.scan")) &&
+            user.roleSlug !== "user" && (
             <Link className="rounded-lg px-2 py-1 hover:bg-stone-100" href="/admin">
-              مدیریت
+              {user.roleSlug === "accountant" ? "گزارش مالی" : "مدیریت"}
             </Link>
           )}
           <Link className="rounded-lg px-2 py-1 hover:bg-stone-100" href="/profile">

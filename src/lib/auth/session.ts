@@ -17,6 +17,8 @@ export type SessionUser = {
   roleSlug: string;
   permissions: string[];
   departmentName: string | null;
+  defaultBranchId: string | null;
+  branchIds: string[];
 };
 
 export async function createSession(input: {
@@ -54,6 +56,7 @@ export async function getSessionUser(
         include: {
           role: { include: { permissions: { include: { permission: true } } } },
           department: true,
+          branchAccess: true,
         },
       },
     },
@@ -70,6 +73,8 @@ export async function getSessionUser(
     roleSlug: session.user.role.slug,
     permissions: session.user.role.permissions.map((p) => p.permission.slug),
     departmentName: session.user.department?.nameFa ?? null,
+    defaultBranchId: session.user.defaultBranchId,
+    branchIds: session.user.branchAccess.map((b) => b.branchId),
   };
 }
 

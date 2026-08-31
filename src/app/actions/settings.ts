@@ -22,6 +22,7 @@ export async function saveSettingsAction(formData: FormData) {
     waitlistEnabled: formData.get("waitlistEnabled") === "on",
     capacityStrict: formData.get("capacityStrict") === "on",
     orgNameFa: String(formData.get("orgNameFa") || "سامانه رزرو غذا"),
+    defaultBranchId: String(formData.get("defaultBranchId") || "") || null,
   };
   await prisma.organizationSetting.upsert({
     where: { id: "default" },

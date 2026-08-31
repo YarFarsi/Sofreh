@@ -3,13 +3,23 @@ import { prisma } from "@/lib/db";
 import { utcDateToCivil } from "@/lib/time/civil";
 import { formatJalaliShort } from "@/lib/time/jalali";
 
-export async function weeklyUserCostReport(from: Date, to: Date) {
+export async function weeklyUserCostReport(
+  from: Date,
+  to: Date,
+  opts?: { branchId?: string; departmentId?: string; costCenterId?: string },
+) {
   const rows = await prisma.reservation.findMany({
     where: {
       serviceDate: { gte: from, lte: to },
       status: { in: ["RESERVED", "SERVED", "NOT_SERVED"] },
+      ...(opts?.branchId ? { branchId: opts.branchId } : {}),
+      ...(opts?.departmentId ? { user: { departmentId: opts.departmentId } } : {}),
+      ...(opts?.costCenterId ? { user: { costCenterId: opts.costCenterId } } : {}),
     },
-    include: { user: { include: { department: true } } },
+    include: {
+      user: { include: { department: true, costCenter: true } },
+      branch: true,
+    },
   });
 
   const map = new Map<
@@ -18,6 +28,8 @@ export async function weeklyUserCostReport(from: Date, to: Date) {
       employee: string;
       employeeId: string;
       department: string;
+      costCenter: string;
+      branch: string;
       breakfast: number;
       lunch: number;
       dinner: number;
@@ -32,6 +44,8 @@ export async function weeklyUserCostReport(from: Date, to: Date) {
       employee: r.user.fullName,
       employeeId: r.user.employeeId,
       department: r.user.department?.nameFa ?? "—",
+      costCenter: r.user.costCenter?.nameFa ?? "—",
+      branch: r.branch.nameFa,
       breakfast: 0,
       lunch: 0,
       dinner: 0,
@@ -97,6 +111,75 @@ export async function unservedReport(from: Date, to: Date) {
     food: r.menuItem.food.titleFa,
     cost: r.employeePrice,
   }));
+}
+
+export async function financialSummary(
+  from: Date,
+  to: Date,
+  opts?: { branchId?: string; departmentId?: string; costCenterId?: string },
+) {
+  const rows = await prisma.reservation.findMany({
+    where: {
+      serviceDate: { gte: from, lte: to },
+      status: { in: ["RESERVED", "SERVED", "NOT_SERVED"] },
+      ...(opts?.branchId ? { branchId: opts.branchId } : {}),
+      ...(opts?.departmentId ? { user: { departmentId: opts.departmentId } } : {}),
+      ...(opts?.costCenterId ? { user: { costCenterId: opts.costCenterId } } : {}),
+    },
+    include: {
+      user: { include: { department: true, costCenter: true } },
+      branch: true,
+      menuItem: { include: { food: true } },
+    },
+  });
+  const totals = {
+    count: rows.length,
+    subsidy: 0,
+    employeeCost: 0,
+    totalCost: 0,
+  };
+  const byBranch = new Map<string, { name: string; subsidy: number; employeeCost: number; totalCost: number }>();
+  const byDept = new Map<string, { name: string; subsidy: number; employeeCost: number; totalCost: number }>();
+  const byCc = new Map<string, { name: string; subsidy: number; employeeCost: number; totalCost: number }>();
+  const byFood = new Map<string, { name: string; subsidy: number; employeeCost: number; totalCost: number; qty: number }>();
+  for (const r of rows) {
+    totals.subsidy += r.subsidy;
+    totals.employeeCost += r.employeePrice;
+    totals.totalCost += r.price;
+    const add = (
+      map: Map<string, { name: string; subsidy: number; employeeCost: number; totalCost: number }>,
+      key: string,
+      name: string,
+    ) => {
+      const cur = map.get(key) ?? { name, subsidy: 0, employeeCost: 0, totalCost: 0 };
+      cur.subsidy += r.subsidy;
+      cur.employeeCost += r.employeePrice;
+      cur.totalCost += r.price;
+      map.set(key, cur);
+    };
+    add(byBranch, r.branchId, r.branch.nameFa);
+    add(byDept, r.user.departmentId ?? "none", r.user.department?.nameFa ?? "—");
+    add(byCc, r.user.costCenterId ?? "none", r.user.costCenter?.nameFa ?? "—");
+    const food = byFood.get(r.menuItem.foodId) ?? {
+      name: r.menuItem.food.titleFa,
+      subsidy: 0,
+      employeeCost: 0,
+      totalCost: 0,
+      qty: 0,
+    };
+    food.subsidy += r.subsidy;
+    food.employeeCost += r.employeePrice;
+    food.totalCost += r.price;
+    food.qty += 1;
+    byFood.set(r.menuItem.foodId, food);
+  }
+  return {
+    totals,
+    byBranch: [...byBranch.values()],
+    byDepartment: [...byDept.values()],
+    byCostCenter: [...byCc.values()],
+    byFood: [...byFood.values()],
+  };
 }
 
 export async function workbookFromRows(

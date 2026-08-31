@@ -37,13 +37,38 @@ async function holidayBlocks(db: Db, date: Date): Promise<boolean> {
   );
 }
 
-async function occupyingCount(db: Db, menuItemId: string): Promise<number> {
+async function occupyingCount(
+  db: Db,
+  menuItemId: string,
+  branchId: string,
+): Promise<number> {
   return db.reservation.count({
     where: {
       menuItemId,
+      branchId,
       status: { in: [...OCCUPYING_STATUSES] },
     },
   });
+}
+
+async function branchCapacity(
+  db: Db,
+  menuItemId: string,
+  branchId: string,
+  fallback: number | null,
+): Promise<number | null> {
+  const row = await db.menuItemBranchCapacity.findUnique({
+    where: { menuItemId_branchId: { menuItemId, branchId } },
+  });
+  return row?.capacity ?? fallback;
+}
+
+async function waitlistOn(db: Db, orgWaitlist: boolean, branchId: string) {
+  const branch = await db.branch.findUnique({ where: { id: branchId } });
+  if (!branch?.active) {
+    throw new AppError(ErrorCodes.WRONG_BRANCH, "شعبه نامعتبر یا غیرفعال است.");
+  }
+  return branch.waitlistEnabled ?? orgWaitlist;
 }
 
 export async function createTicket(db: Db, reservationId: string): Promise<string> {
@@ -62,6 +87,7 @@ export async function createTicket(db: Db, reservationId: string): Promise<strin
 export async function reserveMeal(input: {
   userId: string;
   menuItemId: string;
+  branchId?: string;
   actorId?: string;
   override?: boolean;
   ip?: string | null;
@@ -82,6 +108,14 @@ export async function reserveMeal(input: {
     }
 
     const org = await settings(tx);
+    const branchId =
+      input.branchId ||
+      (await tx.user.findUnique({ where: { id: input.userId } }))?.defaultBranchId ||
+      org.defaultBranchId;
+    if (!branchId) {
+      throw new AppError(ErrorCodes.VALIDATION, "شعبه دریافت را انتخاب کنید.");
+    }
+
     const serviceDate = utcDateToCivil(item.serviceDate);
     const weekStart = startOfWeek(serviceDate, org.weekStartDay);
 
@@ -119,14 +153,15 @@ export async function reserveMeal(input: {
       );
     }
 
-    const occupied = await occupyingCount(tx, item.id);
+    const occupied = await occupyingCount(tx, item.id, branchId);
+    const capacity = await branchCapacity(tx, item.id, branchId, item.capacity);
     let status: ReservationStatus = ReservationStatus.RESERVED;
     let waitlistPosition: number | null = null;
 
-    if (isFull(item.capacity, occupied)) {
-      if (org.waitlistEnabled) {
+    if (isFull(capacity, occupied)) {
+      if (await waitlistOn(tx, org.waitlistEnabled, branchId)) {
         const maxPos = await tx.reservation.aggregate({
-          where: { menuItemId: item.id, status: "WAITLISTED" },
+          where: { menuItemId: item.id, branchId, status: "WAITLISTED" },
           _max: { waitlistPosition: true },
         });
         status = ReservationStatus.WAITLISTED;
@@ -148,6 +183,7 @@ export async function reserveMeal(input: {
         employeePrice: item.employeePrice,
         waitlistPosition,
         actorUserId: input.actorId ?? input.userId,
+        branchId,
       },
     });
 
@@ -176,6 +212,7 @@ export async function reserveMeal(input: {
           menuItemId: item.id,
           employeePrice: item.employeePrice,
           override: !!input.override,
+          branchId,
         },
         ip: input.ip,
       },
@@ -198,6 +235,8 @@ export async function changeReservation(input: {
   actorId: string;
   isOwner: boolean;
   override?: boolean;
+  reason?: string;
+  branchId?: string;
   ip?: string | null;
   now?: Date;
 }): Promise<void> {
@@ -233,12 +272,22 @@ export async function changeReservation(input: {
       throw new AppError(ErrorCodes.CUTOFF, "مهلت ویرایش رزرو به پایان رسیده است.");
     }
 
-    const occupied = await occupyingCount(tx, next.id);
-    if (isFull(next.capacity, occupied) && current.menuItemId !== next.id) {
+    const targetBranch = input.branchId || current.branchId;
+    await waitlistOn(tx, org.waitlistEnabled, targetBranch);
+
+    const occupied = await occupyingCount(tx, next.id, targetBranch);
+    const capacity = await branchCapacity(tx, next.id, targetBranch, next.capacity);
+    const sameSlot =
+      current.menuItemId === next.id && current.branchId === targetBranch;
+    if (isFull(capacity, occupied) && !sameSlot) {
       throw new AppError(ErrorCodes.CAPACITY_FULL, "ظرفیت غذای انتخاب‌شده تکمیل است.");
     }
 
-    const before = { menuItemId: current.menuItemId, employeePrice: current.employeePrice };
+    const before = {
+      menuItemId: current.menuItemId,
+      employeePrice: current.employeePrice,
+      branchId: current.branchId,
+    };
     await tx.reservation.update({
       where: { id: current.id },
       data: {
@@ -247,6 +296,8 @@ export async function changeReservation(input: {
         subsidy: next.subsidy,
         employeePrice: next.employeePrice,
         actorUserId: input.actorId,
+        branchId: targetBranch,
+        changeReason: input.reason,
       },
     });
     await tx.reservationEvent.create({
@@ -255,7 +306,12 @@ export async function changeReservation(input: {
         actorUserId: input.actorId,
         action: input.override ? "admin_change" : "change",
         before,
-        after: { menuItemId: next.id, employeePrice: next.employeePrice },
+        after: {
+          menuItemId: next.id,
+          employeePrice: next.employeePrice,
+          branchId: targetBranch,
+          reason: input.reason ?? null,
+        },
       },
     });
     await writeAudit(
@@ -265,22 +321,37 @@ export async function changeReservation(input: {
         entity: "Reservation",
         entityId: current.id,
         before,
-        after: { menuItemId: next.id },
+        after: { menuItemId: next.id, branchId: targetBranch, reason: input.reason ?? null },
         ip: input.ip,
       },
       tx,
     );
 
     if (!input.isOwner) {
+      const body = input.reason
+        ? `رزرو غذای شما توسط مدیر تغییر کرد. دلیل: ${input.reason}`
+        : "رزرو غذای شما توسط مدیر تغییر کرد.";
       await tx.notification.create({
         data: {
           userId: current.userId,
           titleFa: "تغییر رزرو",
-          bodyFa: "رزرو غذای شما توسط مدیر تغییر کرد.",
+          bodyFa: body,
         },
       });
     }
   });
+  if (!input.isOwner) {
+    const row = await defaultPrisma.reservation.findUnique({
+      where: { id: input.reservationId },
+    });
+    if (row) {
+      const { sendUserEmail } = await import("@/lib/notifications/email");
+      const body = input.reason
+        ? `رزرو غذای شما توسط مدیر تغییر کرد. دلیل: ${input.reason}`
+        : "رزرو غذای شما توسط مدیر تغییر کرد.";
+      await sendUserEmail(row.userId, "تغییر رزرو", body);
+    }
+  }
 }
 
 export async function cancelReservation(input: {
@@ -360,32 +431,47 @@ export async function cancelReservation(input: {
       tx,
     );
 
-    await promoteWaitlist(tx, current.menuItemId, input.actorId);
+    await promoteWaitlist(tx, current.menuItemId, current.branchId, input.actorId);
 
     if (!input.isOwner) {
+      const body = input.reason
+        ? `رزرو غذای شما توسط مدیر لغو شد. دلیل: ${input.reason}`
+        : "رزرو غذای شما توسط مدیر لغو شد.";
       await tx.notification.create({
         data: {
           userId: current.userId,
           titleFa: "لغو رزرو",
-          bodyFa: "رزرو غذای شما توسط مدیر لغو شد.",
+          bodyFa: body,
         },
       });
     }
   });
+  if (!input.isOwner) {
+    const { sendUserEmail } = await import("@/lib/notifications/email");
+    const body = input.reason
+      ? `رزرو غذای شما توسط مدیر لغو شد. دلیل: ${input.reason}`
+      : "رزرو غذای شما توسط مدیر لغو شد.";
+    const row = await defaultPrisma.reservation.findUnique({
+      where: { id: input.reservationId },
+    });
+    if (row) await sendUserEmail(row.userId, "لغو رزرو", body);
+  }
 }
 
 export async function promoteWaitlist(
   tx: Prisma.TransactionClient,
   menuItemId: string,
+  branchId: string,
   actorId: string,
 ) {
   const item = await tx.menuItem.findUnique({ where: { id: menuItemId } });
   if (!item) return;
-  const occupied = await occupyingCount(tx, menuItemId);
-  if (isFull(item.capacity, occupied)) return;
+  const capacity = await branchCapacity(tx, menuItemId, branchId, item.capacity);
+  const occupied = await occupyingCount(tx, menuItemId, branchId);
+  if (isFull(capacity, occupied)) return;
 
   const next = await tx.reservation.findFirst({
-    where: { menuItemId, status: "WAITLISTED" },
+    where: { menuItemId, branchId, status: "WAITLISTED" },
     orderBy: [{ waitlistPosition: "asc" }, { createdAt: "asc" }],
   });
   if (!next) return;

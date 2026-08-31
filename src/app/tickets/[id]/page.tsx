@@ -21,6 +21,7 @@ export default async function TicketPage({
     include: {
       ticket: true,
       user: true,
+      branch: true,
       menuItem: { include: { food: true } },
     },
   });
@@ -45,6 +46,7 @@ export default async function TicketPage({
           <p className="mt-3">{formatJalaliLong(utcDateToCivil(reservation.serviceDate))}</p>
           <p>{MEAL_LABEL[reservation.mealKind]}</p>
           <p className="font-bold">{reservation.menuItem.food.titleFa}</p>
+          <p className="text-sm text-muted">محل دریافت: {reservation.branch.nameFa}</p>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img className="mx-auto mt-4" src={qr} alt="QR بلیت" width={280} height={280} />
           <p className="mt-2 break-all text-xs text-muted">کد بلیت فقط برای اسکنر داخلی است.</p>

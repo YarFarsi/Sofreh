@@ -14,7 +14,7 @@ import {
   sessionCookieOptions,
 } from "@/lib/auth/session";
 import { rateLimit } from "@/lib/auth/rate-limit";
-import { AppError, ErrorCodes } from "@/lib/errors";
+import { AppError } from "@/lib/errors";
 import { writeAudit } from "@/lib/audit";
 import { log } from "@/lib/logger";
 

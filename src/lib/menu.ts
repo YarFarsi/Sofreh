@@ -28,8 +28,9 @@ export async function menuForDates(dates: CivilDate[]) {
       restaurant: true,
       reservations: {
         where: { status: { in: [...OCCUPYING_STATUSES] } },
-        select: { id: true, userId: true, status: true },
+        select: { id: true, userId: true, status: true, branchId: true },
       },
+      branchCaps: true,
     },
     orderBy: [{ serviceDate: "asc" }, { mealKind: "asc" }],
   });

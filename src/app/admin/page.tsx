@@ -7,37 +7,43 @@ import { formatJalaliLong, toPersianDigits } from "@/lib/time/jalali";
 import { weekReservationClosesAt } from "@/lib/time/cutoff";
 import { startOfWeek } from "@/lib/time/week";
 import { MEAL_LABEL } from "@/lib/labels";
+import { branchWhere } from "@/lib/auth/branches";
 
 export const dynamic = "force-dynamic";
 
 export default async function AdminHome() {
-  await requirePermission("reports.view");
+  const user = await requirePermission("reports.view");
   const org = await loadOrg();
   const z = zonedDateTime(new Date(), org.timezone);
   const today = { year: z.year, month: z.month, day: z.day };
   const todayDate = civilToUtcDate(today);
   const weekStart = startOfWeek(today, org.weekStartDay);
   const cutoff = weekReservationClosesAt(weekStart, org);
+  const scope = branchWhere(user);
 
   const todayRes = await prisma.reservation.findMany({
     where: {
       serviceDate: todayDate,
       status: { in: ["RESERVED", "SERVED", "NOT_SERVED"] },
+      ...scope,
     },
-    include: { menuItem: { include: { food: true } } },
+    include: { menuItem: { include: { food: true } }, branch: true },
   });
 
   const meals = ["BREAKFAST", "LUNCH", "DINNER"] as const;
   const unservedCount = await prisma.reservation.count({
-    where: { status: "NOT_SERVED" },
+    where: { status: "NOT_SERVED", ...scope },
   });
   const cancelledToday = await prisma.reservation.count({
-    where: { serviceDate: todayDate, status: "CANCELLED" },
+    where: { serviceDate: todayDate, status: "CANCELLED", ...scope },
   });
 
   return (
     <AdminShell>
       <h1 className="mb-4 text-2xl font-bold">امروز — {formatJalaliLong(today)}</h1>
+      {user.roleSlug === "branch_admin" && (
+        <p className="mb-2 text-sm text-amber-800">نمایش محدود به شعبه‌های شما</p>
+      )}
       <p className="mb-4 text-sm text-muted">
         مهلت رزرو هفته جاری تا{" "}
         {cutoff.toLocaleString("fa-IR", { timeZone: org.timezone })}

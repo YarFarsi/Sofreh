@@ -3,7 +3,7 @@ import { prisma } from "@/lib/db";
 import { requirePermission } from "@/lib/auth/guards";
 import { approveUser, setUserEnabled } from "@/app/actions/users";
 import { STATUS_LABEL } from "@/lib/labels";
-import { adminReserveForUser, adminCancelReservation } from "@/app/actions/reservations";
+import { adminReserveForUser, adminCancelReservation, adminChangeReservation } from "@/app/actions/reservations";
 
 export const dynamic = "force-dynamic";
 
@@ -26,7 +26,7 @@ export default async function UsersAdmin({
         ],
       }
     : {};
-  const [users, total, menuItems] = await Promise.all([
+  const [users, total, menuItems, branches] = await Promise.all([
     prisma.user.findMany({
       where,
       include: { role: true, department: true },
@@ -41,6 +41,7 @@ export default async function UsersAdmin({
       take: 30,
       orderBy: { serviceDate: "desc" },
     }),
+    prisma.branch.findMany({ where: { active: true } }),
   ]);
 
   return (
@@ -110,7 +111,7 @@ export default async function UsersAdmin({
           "use server";
           await adminReserveForUser(fd);
         }}
-        className="card mb-3 grid gap-2 p-4 md:grid-cols-3"
+        className="card mb-3 grid gap-2 p-4 md:grid-cols-4"
       >
         <select className="field" name="userId" required>
           {users.map((u) => (
@@ -126,8 +127,35 @@ export default async function UsersAdmin({
             </option>
           ))}
         </select>
+        <select className="field" name="branchId" required>
+          {branches.map((b) => (
+            <option key={b.id} value={b.id}>
+              {b.nameFa}
+            </option>
+          ))}
+        </select>
         <button className="btn btn-primary" type="submit">
           رزرو برای کاربر
+        </button>
+      </form>
+      <form
+        action={async (fd) => {
+          "use server";
+          await adminChangeReservation(fd);
+        }}
+        className="card mb-3 grid gap-2 p-4 md:grid-cols-4"
+      >
+        <input className="field" name="reservationId" placeholder="شناسه رزرو" required />
+        <select className="field" name="menuItemId" required>
+          {menuItems.map((m) => (
+            <option key={m.id} value={m.id}>
+              {m.food.titleFa}
+            </option>
+          ))}
+        </select>
+        <input className="field" name="reason" placeholder="دلیل تغییر" />
+        <button className="btn btn-primary" type="submit">
+          تغییر غذا
         </button>
       </form>
       <form

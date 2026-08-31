@@ -30,6 +30,17 @@ export async function addMenuItemAction(formData: FormData) {
       active: true,
     },
   });
+  const branches = await prisma.branch.findMany({ where: { active: true } });
+  if (branches.length) {
+    await prisma.menuItemBranchCapacity.createMany({
+      data: branches.map((b) => ({
+        menuItemId: created.id,
+        branchId: b.id,
+        capacity: created.capacity,
+      })),
+      skipDuplicates: true,
+    });
+  }
   await writeAudit({
     actorId: actor.id,
     action: "menu.create",

@@ -12,13 +12,21 @@ export default async function SettingsPage() {
     where: { id: "default" },
   });
   const meals = await prisma.mealSchedule.findMany();
+  const branches = await prisma.branch.findMany({ where: { active: true } });
   return (
     <AdminShell>
       <h1 className="mb-4 text-2xl font-bold">تنظیمات سازمان</h1>
       <form action={saveSettingsAction} className="card mb-6 grid gap-3 p-4 md:grid-cols-2">
         <label className="text-sm">
-          نام سامانه
-          <input className="field mt-1" name="orgNameFa" defaultValue={org.orgNameFa} />
+          شعبه پیش‌فرض
+          <select className="field mt-1" name="defaultBranchId" defaultValue={org.defaultBranchId ?? ""}>
+            <option value="">—</option>
+            {branches.map((b) => (
+              <option key={b.id} value={b.id}>
+                {b.nameFa}
+              </option>
+            ))}
+          </select>
         </label>
         <label className="text-sm">
           منطقه زمانی

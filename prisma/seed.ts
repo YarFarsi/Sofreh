@@ -31,6 +31,10 @@ const PERMS = [
   "settings.update",
   "audit.view",
   "holidays.manage",
+  "branches.view",
+  "branches.manage",
+  "finance.view",
+  "ratings.create",
 ];
 
 const USER_PERMS = [
@@ -40,6 +44,25 @@ const USER_PERMS = [
   "reservations.create",
   "reservations.update",
   "reservations.cancel",
+  "ratings.create",
+];
+
+const BRANCH_ADMIN_PERMS = [
+  "foods.view",
+  "menus.view",
+  "reservations.view",
+  "meals.scan",
+  "meals.serve",
+  "reports.view",
+  "reports.export",
+  "branches.view",
+];
+
+const ACCOUNTANT_PERMS = [
+  "reports.view",
+  "reports.export",
+  "finance.view",
+  "foods.view",
 ];
 
 function utcDate(y: number, m: number, d: number) {
@@ -76,6 +99,29 @@ async function main() {
   const userEmail = process.env.DEMO_USER_EMAIL || "user@example.local";
   const userPassword = process.env.DEMO_USER_PASSWORD || "ChangeMe-User-0!";
 
+  await prisma.branch.upsert({
+    where: { slug: "central" },
+    update: {},
+    create: {
+      id: "branch-central",
+      slug: "central",
+      nameFa: "شعبه مرکزی",
+      address: "ساختمان اصلی",
+      contact: "داخلی ۱۲۰۰",
+    },
+  });
+  await prisma.branch.upsert({
+    where: { slug: "north" },
+    update: {},
+    create: {
+      id: "branch-north",
+      slug: "north",
+      nameFa: "شعبه شمال",
+      address: "سایت شمال",
+      contact: "داخلی ۱۳۰۰",
+    },
+  });
+
   await prisma.organizationSetting.upsert({
     where: { id: "default" },
     update: {},
@@ -88,7 +134,12 @@ async function main() {
       waitlistEnabled: true,
       capacityStrict: true,
       orgNameFa: "سامانه رزرو غذا",
+      defaultBranchId: "branch-central",
     },
+  });
+  await prisma.organizationSetting.update({
+    where: { id: "default" },
+    data: { defaultBranchId: "branch-central" },
   });
 
   for (const kind of [
@@ -121,6 +172,16 @@ async function main() {
     update: {},
     create: { slug: "user", nameFa: "کاربر" },
   });
+  const branchAdminRole = await prisma.role.upsert({
+    where: { slug: "branch_admin" },
+    update: {},
+    create: { slug: "branch_admin", nameFa: "مدیر شعبه" },
+  });
+  const accountantRole = await prisma.role.upsert({
+    where: { slug: "accountant" },
+    update: {},
+    create: { slug: "accountant", nameFa: "حسابدار" },
+  });
 
   const allPerms = await prisma.permission.findMany();
   for (const p of allPerms) {
@@ -136,6 +197,20 @@ async function main() {
         create: { roleId: userRole.id, permissionId: p.id },
       });
     }
+    if (BRANCH_ADMIN_PERMS.includes(p.slug)) {
+      await prisma.rolePermission.upsert({
+        where: { roleId_permissionId: { roleId: branchAdminRole.id, permissionId: p.id } },
+        update: {},
+        create: { roleId: branchAdminRole.id, permissionId: p.id },
+      });
+    }
+    if (ACCOUNTANT_PERMS.includes(p.slug)) {
+      await prisma.rolePermission.upsert({
+        where: { roleId_permissionId: { roleId: accountantRole.id, permissionId: p.id } },
+        update: {},
+        create: { roleId: accountantRole.id, permissionId: p.id },
+      });
+    }
   }
 
   const it = await prisma.department.upsert({
@@ -147,6 +222,17 @@ async function main() {
     where: { slug: "finance" },
     update: {},
     create: { slug: "finance", nameFa: "مالی" },
+  });
+
+  await prisma.costCenter.upsert({
+    where: { slug: "ops" },
+    update: {},
+    create: { slug: "ops", nameFa: "عملیات", departmentId: it.id },
+  });
+  const ccFinance = await prisma.costCenter.upsert({
+    where: { slug: "fin-cc" },
+    update: {},
+    create: { slug: "fin-cc", nameFa: "مرکز هزینه مالی", departmentId: finance.id },
   });
 
   const restaurant = await prisma.restaurant.upsert({
@@ -224,6 +310,7 @@ async function main() {
       email: userEmail,
       mobile: "09120000002",
       departmentId: finance.id,
+      defaultBranchId: "branch-central",
       passwordHash: await bcrypt.hash(userPassword, 12),
       status: "ACTIVE",
       roleId: userRole.id,
@@ -253,9 +340,48 @@ async function main() {
       fullName: "سارا محمدی",
       email: "sara@example.local",
       departmentId: finance.id,
+      costCenterId: ccFinance.id,
+      defaultBranchId: "branch-north",
       passwordHash: await bcrypt.hash("ChangeMe-User-0!", 12),
       status: "ACTIVE",
       roleId: userRole.id,
+    },
+  });
+
+  const branchAdmin = await prisma.user.upsert({
+    where: { email: "branch@example.local" },
+    update: {},
+    create: {
+      employeeId: "3001",
+      fullName: "مدیر شعبه شمال",
+      email: "branch@example.local",
+      departmentId: it.id,
+      defaultBranchId: "branch-north",
+      passwordHash: await bcrypt.hash("ChangeMe-Branch-0!", 12),
+      status: "ACTIVE",
+      roleId: branchAdminRole.id,
+    },
+  });
+  await prisma.branchUser.upsert({
+    where: {
+      branchId_userId: { branchId: "branch-north", userId: branchAdmin.id },
+    },
+    update: {},
+    create: { branchId: "branch-north", userId: branchAdmin.id },
+  });
+
+  await prisma.user.upsert({
+    where: { email: "accountant@example.local" },
+    update: {},
+    create: {
+      employeeId: "4001",
+      fullName: "حسابدار نمونه",
+      email: "accountant@example.local",
+      departmentId: finance.id,
+      costCenterId: ccFinance.id,
+      passwordHash: await bcrypt.hash("ChangeMe-Account-0!", 12),
+      status: "ACTIVE",
+      roleId: accountantRole.id,
     },
   });
 
@@ -338,6 +464,7 @@ async function main() {
         employeePrice: item.employeePrice,
         servedAt: status === "SERVED" ? new Date() : null,
         servedById: status === "SERVED" ? admin.id : null,
+        branchId: "branch-central",
       },
     });
     if (status === "RESERVED" || status === "SERVED" || status === "NOT_SERVED") {
@@ -356,7 +483,20 @@ async function main() {
   }
 
   await ensureReservation(user.id, lunchToday, "RESERVED", "demo-ticket-ali-lunch");
-  await ensureReservation(extra.id, lunchToday, "SERVED", "demo-ticket-sara-served");
+  const served = await ensureReservation(extra.id, lunchToday, "SERVED", "demo-ticket-sara-served");
+  if (served) {
+    await prisma.foodRating.upsert({
+      where: { reservationId: served.id },
+      update: {},
+      create: {
+        reservationId: served.id,
+        userId: extra.id,
+        foodId: "food-ghorme",
+        rating: 5,
+        comment: "عالی بود",
+      },
+    });
+  }
   if (lunchY) {
     await ensureReservation(user.id, lunchY, "NOT_SERVED", "demo-ticket-unserved");
   }
@@ -378,6 +518,8 @@ async function main() {
   console.log("Seed completed.");
   console.log(`Admin: ${adminEmail}`);
   console.log(`User: ${userEmail}`);
+  console.log("Branch admin: branch@example.local");
+  console.log("Accountant: accountant@example.local");
 }
 
 main()

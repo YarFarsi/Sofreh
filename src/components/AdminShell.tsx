@@ -1,21 +1,37 @@
 import Link from "next/link";
 import { AppHeader } from "@/components/AppHeader";
-import { requirePermission } from "@/lib/auth/guards";
+import { requireUser } from "@/lib/auth/guards";
+import type { PermissionSlug } from "@/lib/auth/permissions";
 
-const LINKS = [
+const LINKS: { href: string; label: string; perm: PermissionSlug }[] = [
   { href: "/admin", label: "داشبورد", perm: "reports.view" },
   { href: "/admin/users", label: "کاربران", perm: "users.view" },
-  { href: "/admin/foods", label: "غذاها", perm: "foods.view" },
-  { href: "/admin/menus", label: "منوی هفتگی", perm: "menus.view" },
+  { href: "/admin/foods", label: "غذاها", perm: "foods.create" },
+  { href: "/admin/menus", label: "منوی هفتگی", perm: "menus.create" },
+  { href: "/admin/branches", label: "شعبه‌ها", perm: "branches.manage" },
   { href: "/admin/holidays", label: "تعطیلات", perm: "holidays.manage" },
   { href: "/admin/unserved", label: "تحویل‌نشده", perm: "reports.view" },
   { href: "/admin/reports", label: "گزارش‌ها", perm: "reports.view" },
+  { href: "/admin/finance", label: "حسابداری", perm: "finance.view" },
   { href: "/admin/audit", label: "حسابرسی", perm: "audit.view" },
   { href: "/admin/settings", label: "تنظیمات", perm: "settings.view" },
 ];
 
 export async function AdminShell({ children }: { children: React.ReactNode }) {
-  const user = await requirePermission("users.view");
+  const user = await requireUser();
+  const staff =
+    user.permissions.includes("reports.view") ||
+    user.permissions.includes("users.view") ||
+    user.permissions.includes("finance.view") ||
+    user.permissions.includes("meals.scan");
+  if (!staff) {
+    return (
+      <>
+        <AppHeader user={user} />
+        <p className="p-8">دسترسی مجاز نیست.</p>
+      </>
+    );
+  }
   return (
     <>
       <AppHeader user={user} />

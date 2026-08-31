@@ -9,12 +9,13 @@ import { utcDateToCivil } from "@/lib/time/civil";
 
 export async function scanTicketAction(
   token: string,
+  servingBranchId: string,
 ): Promise<{ error?: string; preview?: Record<string, string> }> {
   const user = await currentUser();
   if (!user) return { error: "وارد نشده‌اید." };
   try {
     assertPermission(user, "meals.scan");
-    const p = await previewTicket(token.trim());
+    const p = await previewTicket(token.trim(), new Date(), servingBranchId, user);
     return {
       preview: {
         token,
@@ -26,6 +27,7 @@ export async function scanTicketAction(
         mealLabel: p.mealLabel,
         date: formatJalaliLong(utcDateToCivil(p.serviceDate)),
         status: p.status,
+        branchName: p.branchName,
       },
     };
   } catch (e) {
@@ -35,12 +37,18 @@ export async function scanTicketAction(
 
 export async function serveTicketAction(
   token: string,
+  servingBranchId: string,
 ): Promise<{ error?: string; ok?: boolean }> {
   const user = await currentUser();
   if (!user) return { error: "وارد نشده‌اید." };
   try {
     assertPermission(user, "meals.serve");
-    await serveTicket({ rawToken: token.trim(), actorId: user.id });
+    await serveTicket({
+      rawToken: token.trim(),
+      actorId: user.id,
+      actor: user,
+      servingBranchId,
+    });
     return { ok: true };
   } catch (e) {
     return { error: e instanceof AppError ? e.message : "تحویل ناموفق بود." };

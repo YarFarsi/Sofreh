@@ -6,9 +6,16 @@ import { scanTicketAction, serveTicketAction } from "@/app/actions/serving";
 
 type Preview = Record<string, string>;
 
-export function ServeScanner() {
+export function ServeScanner({
+  branches,
+  initialBranchId,
+}: {
+  branches: { id: string; nameFa: string }[];
+  initialBranchId: string;
+}) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [branchId, setBranchId] = useState(initialBranchId);
   const [manual, setManual] = useState("");
   const [preview, setPreview] = useState<Preview | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -40,7 +47,7 @@ export function ServeScanner() {
               const code = jsQR(img.data, img.width, img.height);
               if (code?.data) {
                 start(async () => {
-                  const r = await scanTicketAction(code.data);
+                  const r = await scanTicketAction(code.data, branchId);
                   if (r.error) setError(r.error);
                   if (r.preview) {
                     setPreview(r.preview);
@@ -63,12 +70,12 @@ export function ServeScanner() {
       if (timer) window.clearTimeout(timer);
       stream?.getTracks().forEach((t) => t.stop());
     };
-  }, []);
+  }, [branchId]);
 
   function lookup() {
     start(async () => {
       setOk(null);
-      const r = await scanTicketAction(manual);
+      const r = await scanTicketAction(manual, branchId);
       setError(r.error ?? null);
       setPreview(r.preview ?? null);
     });
@@ -77,7 +84,7 @@ export function ServeScanner() {
   function serve() {
     if (!preview?.token) return;
     start(async () => {
-      const r = await serveTicketAction(preview.token);
+      const r = await serveTicketAction(preview.token, branchId);
       if (r.error) setError(r.error);
       if (r.ok) {
         setOk("غذا با موفقیت تحویل شد.");
@@ -88,6 +95,20 @@ export function ServeScanner() {
 
   return (
     <div className="space-y-4">
+      <label className="block text-sm">
+        شعبه تحویل
+        <select
+          className="field mt-1"
+          value={branchId}
+          onChange={(e) => setBranchId(e.target.value)}
+        >
+          {branches.map((b) => (
+            <option key={b.id} value={b.id}>
+              {b.nameFa}
+            </option>
+          ))}
+        </select>
+      </label>
       <video ref={videoRef} className="w-full rounded-2xl bg-black" playsInline muted />
       <canvas ref={canvasRef} className="hidden" />
       <div className="flex gap-2">
@@ -124,6 +145,7 @@ export function ServeScanner() {
           <p>{preview.date}</p>
           <p>{preview.mealLabel}</p>
           <p className="text-xl font-bold">{preview.foodTitle}</p>
+          <p className="text-sm">شعبه: {preview.branchName}</p>
           <button
             className="btn btn-primary mt-2 w-full py-4 text-xl"
             type="button"

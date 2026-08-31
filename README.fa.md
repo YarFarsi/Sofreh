@@ -11,6 +11,8 @@
 | مدیر | `admin@example.local` | `ChangeMe-Admin-0!` |
 | کاربر | `user@example.local` | `ChangeMe-User-0!` |
 | کاربر در انتظار تأیید | `pending@example.local` | `ChangeMe-Pending-0!` |
+| مدیر شعبه شمال | `branch@example.local` | `ChangeMe-Branch-0!` |
+| حسابدار | `accountant@example.local` | `ChangeMe-Account-0!` |
 
 ## نصب و راه‌اندازی (توسعه)
 

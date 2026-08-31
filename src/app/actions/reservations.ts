@@ -15,7 +15,10 @@ function ipFrom(h: Headers) {
   return h.get("x-forwarded-for")?.split(",")[0]?.trim() || null;
 }
 
-export async function reserveAction(menuItemId: string): Promise<{ error?: string; ok?: boolean }> {
+export async function reserveAction(
+  menuItemId: string,
+  branchId: string,
+): Promise<{ error?: string; ok?: boolean }> {
   const user = await currentUser();
   if (!user) return { error: "وارد نشده‌اید." };
   try {
@@ -24,6 +27,7 @@ export async function reserveAction(menuItemId: string): Promise<{ error?: strin
     await reserveMeal({
       userId: user.id,
       menuItemId,
+      branchId,
       actorId: user.id,
       ip: ipFrom(h),
     });
@@ -58,6 +62,7 @@ export async function cancelOwnAction(reservationId: string): Promise<{ error?: 
 export async function changeOwnAction(
   reservationId: string,
   menuItemId: string,
+  branchId?: string,
 ): Promise<{ error?: string }> {
   const user = await currentUser();
   if (!user) return { error: "وارد نشده‌اید." };
@@ -66,6 +71,7 @@ export async function changeOwnAction(
     await changeReservation({
       reservationId,
       menuItemId,
+      branchId,
       actorId: user.id,
       isOwner: true,
     });
@@ -76,6 +82,19 @@ export async function changeOwnAction(
   }
 }
 
+export async function setDefaultBranchAction(branchId: string) {
+  const user = await currentUser();
+  if (!user) return { error: "وارد نشده‌اید." };
+  const { prisma } = await import("@/lib/db");
+  await prisma.user.update({
+    where: { id: user.id },
+    data: { defaultBranchId: branchId || null },
+  });
+  revalidatePath("/");
+  revalidatePath("/profile");
+  return { ok: true };
+}
+
 export async function adminReserveForUser(formData: FormData): Promise<{ error?: string }> {
   const user = await currentUser();
   if (!user) return { error: "وارد نشده‌اید." };
@@ -84,6 +103,7 @@ export async function adminReserveForUser(formData: FormData): Promise<{ error?:
     await reserveMeal({
       userId: String(formData.get("userId")),
       menuItemId: String(formData.get("menuItemId")),
+      branchId: String(formData.get("branchId") || ""),
       actorId: user.id,
       override: true,
     });
@@ -105,6 +125,8 @@ export async function adminChangeReservation(formData: FormData): Promise<{ erro
       actorId: user.id,
       isOwner: false,
       override: true,
+      reason: String(formData.get("reason") || ""),
+      branchId: String(formData.get("branchId") || "") || undefined,
     });
     revalidatePath("/admin");
     return {};
