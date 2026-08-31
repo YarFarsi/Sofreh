@@ -1,0 +1,12 @@
+node_modules
+.next
+.git
+data
+backups
+dist
+coverage
+playwright-report
+test-results
+*.tar.gz
+.env
+.env.local

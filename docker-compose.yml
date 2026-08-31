@@ -1,0 +1,73 @@
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-food}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me-db-password}
+      POSTGRES_DB: ${POSTGRES_DB:-food_reservation}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-food} -d ${POSTGRES_DB:-food_reservation}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    networks:
+      - food-internal
+
+  app:
+    image: ${APP_IMAGE:-food-reservation:0.1.0}
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-food}:${POSTGRES_PASSWORD:-change-me-db-password}@db:5432/${POSTGRES_DB:-food_reservation}?schema=public
+      APP_URL: ${APP_URL:-http://localhost:3000}
+      SESSION_SECRET: ${SESSION_SECRET:-replace-with-a-long-random-secret-at-least-32-chars}
+      SESSION_DAYS: ${SESSION_DAYS:-7}
+      UPLOAD_DIR: /data/uploads
+      TZ: ${TZ:-Asia/Tehran}
+      SEED_DEMO: ${SEED_DEMO:-true}
+      DEMO_ADMIN_EMAIL: ${DEMO_ADMIN_EMAIL:-admin@example.local}
+      DEMO_ADMIN_PASSWORD: ${DEMO_ADMIN_PASSWORD:-ChangeMe-Admin-0!}
+      DEMO_USER_EMAIL: ${DEMO_USER_EMAIL:-user@example.local}
+      DEMO_USER_PASSWORD: ${DEMO_USER_PASSWORD:-ChangeMe-User-0!}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:-}
+      SMTP_TLS: ${SMTP_TLS:-true}
+    volumes:
+      - uploads:/data/uploads
+    ports:
+      - "${APP_PORT:-3000}:3000"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+    networks:
+      - food-internal
+
+volumes:
+  pgdata:
+  uploads:
+
+networks:
+  food-internal:
+    driver: bridge
+    internal: false

@@ -1,0 +1,256 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserStatus {
+  PENDING
+  ACTIVE
+  DISABLED
+}
+
+enum MealKind {
+  BREAKFAST
+  LUNCH
+  DINNER
+}
+
+enum ReservationStatus {
+  RESERVED
+  CANCELLED
+  WAITLISTED
+  SERVED
+  NOT_SERVED
+}
+
+enum HolidayKind {
+  HOLIDAY
+  COMPANY_CLOSED
+  SPECIAL_WORKING_DAY
+}
+
+model Role {
+  id          String           @id @default(cuid())
+  slug        String           @unique
+  nameFa      String
+  users       User[]
+  permissions RolePermission[]
+}
+
+model Permission {
+  id    String           @id @default(cuid())
+  slug  String           @unique
+  roles RolePermission[]
+}
+
+model RolePermission {
+  roleId       String
+  permissionId String
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+}
+
+model Department {
+  id     String @id @default(cuid())
+  nameFa String
+  slug   String @unique
+  users  User[]
+}
+
+model User {
+  id             String         @id @default(cuid())
+  employeeId     String         @unique
+  fullName       String
+  email          String         @unique
+  mobile         String?
+  departmentId   String?
+  department     Department?    @relation(fields: [departmentId], references: [id])
+  passwordHash   String
+  status         UserStatus     @default(PENDING)
+  photoPath      String?
+  roleId         String
+  role           Role           @relation(fields: [roleId], references: [id])
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  sessions       Session[]
+  reservations   Reservation[]
+  notifications  Notification[]
+  auditLogs      AuditLog[]     @relation("AuditActor")
+  servedMeals    Reservation[]  @relation("ServedBy")
+  actedEvents    ReservationEvent[] @relation("EventActor")
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String   @unique
+  expiresAt DateTime
+  ip        String?
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model OrganizationSetting {
+  id                      String  @id
+  timezone                String  @default("Asia/Tehran")
+  weekStartDay            Int     @default(6)
+  reservationCutoffHours  Int     @default(24)
+  cancellationCutoffHours Int     @default(2)
+  waitlistEnabled         Boolean @default(true)
+  capacityStrict          Boolean @default(true)
+  orgNameFa               String  @default("سامانه رزرو غذا")
+}
+
+model MealSchedule {
+  kind      MealKind @id
+  labelFa   String
+  startTime String
+  endTime   String
+  active    Boolean  @default(true)
+}
+
+model Restaurant {
+  id        String     @id @default(cuid())
+  nameFa    String
+  active    Boolean    @default(true)
+  foods     Food[]
+  menuItems MenuItem[]
+}
+
+model Food {
+  id              String     @id @default(cuid())
+  titleFa         String
+  descriptionFa   String     @default("")
+  imagePath       String?
+  price           Int
+  subsidy         Int
+  employeePrice   Int
+  restaurantId    String
+  restaurant      Restaurant @relation(fields: [restaurantId], references: [id])
+  defaultCapacity Int?
+  active          Boolean    @default(true)
+  deletedAt       DateTime?
+  menuItems       MenuItem[]
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+}
+
+model MenuItem {
+  id            String         @id @default(cuid())
+  serviceDate   DateTime       @db.Date
+  mealKind      MealKind
+  foodId        String
+  food          Food           @relation(fields: [foodId], references: [id])
+  restaurantId  String
+  restaurant    Restaurant     @relation(fields: [restaurantId], references: [id])
+  price         Int
+  subsidy       Int
+  employeePrice Int
+  capacity      Int?
+  active        Boolean        @default(true)
+  reservations  Reservation[]
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  @@unique([serviceDate, mealKind, foodId])
+  @@index([serviceDate, mealKind])
+}
+
+model Reservation {
+  id               String             @id @default(cuid())
+  userId           String
+  user             User               @relation(fields: [userId], references: [id])
+  menuItemId       String
+  menuItem         MenuItem           @relation(fields: [menuItemId], references: [id])
+  serviceDate      DateTime           @db.Date
+  mealKind         MealKind
+  status           ReservationStatus
+  price            Int
+  subsidy          Int
+  employeePrice    Int
+  waitlistPosition Int?
+  servedAt         DateTime?
+  servedById       String?
+  servedBy         User?              @relation("ServedBy", fields: [servedById], references: [id])
+  actorUserId      String?
+  cancelReason     String?
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+  ticket           MealTicket?
+  events           ReservationEvent[]
+
+  @@index([userId, serviceDate])
+  @@index([menuItemId, status])
+  @@index([status, serviceDate, mealKind])
+}
+
+model ReservationEvent {
+  id            String       @id @default(cuid())
+  reservationId String
+  reservation   Reservation  @relation(fields: [reservationId], references: [id], onDelete: Cascade)
+  actorUserId   String?
+  actor         User?        @relation("EventActor", fields: [actorUserId], references: [id])
+  action        String
+  before        Json?
+  after         Json?
+  createdAt     DateTime     @default(now())
+}
+
+model MealTicket {
+  id            String       @id @default(cuid())
+  reservationId String       @unique
+  reservation   Reservation  @relation(fields: [reservationId], references: [id], onDelete: Cascade)
+  token         String       @unique
+  tokenHash     String       @unique
+  valid         Boolean      @default(true)
+  createdAt     DateTime     @default(now())
+}
+
+model Holiday {
+  id      String      @id @default(cuid())
+  date    DateTime    @db.Date
+  kind    HolidayKind
+  titleFa String
+
+  @@unique([date, kind])
+  @@index([date])
+}
+
+model Notification {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  titleFa   String
+  bodyFa    String
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId, readAt])
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  actorId   String?
+  actor     User?    @relation("AuditActor", fields: [actorId], references: [id])
+  action    String
+  entity    String
+  entityId  String
+  before    Json?
+  after     Json?
+  ip        String?
+  createdAt DateTime @default(now())
+
+  @@index([entity, entityId])
+  @@index([createdAt])
+  @@index([actorId])
+}
