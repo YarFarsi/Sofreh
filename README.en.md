@@ -1,10 +1,10 @@
 **[🇮🇷 فارسی](./README.md)** · **[🇬🇧 English](./README.en.md)**
 
-# Food Reservation (On-Premise, Air-Gapped)
+# Sofreh (سفره)
 
-Persian-first RTL web application for company meal reservation. It is designed to run entirely on a private LAN with **no Internet access at runtime**.
+**Set the table on your own network.** A Persian-first, RTL staff meal reservation system that runs entirely on a private LAN — **no Internet at runtime**.
 
-This release includes local authentication, weekly menus, Jalali calendar, capacity/waitlist, QR meal tickets, serving, reports (Excel), audit logs, multi-branch pickup, optional internal SMTP, accounting reports, food ratings, and Docker offline deployment.
+Jalali weekly menus, branch pickup, capacity and waitlist, QR meal tickets, serving, Excel and finance reports, optional internal SMTP, food ratings, and air-gapped Docker deployment.
 
 ## Donate
 
