@@ -1,28 +1,39 @@
-# Food Reservation (On-Premise, Air-Gapped)
+<div dir="rtl" align="right">
 
-Persian-first RTL web application for company meal reservation. It is designed to run entirely on a private LAN with **no Internet access at runtime**.
+**[🇮🇷 فارسی](./README.md)** · **[🇬🇧 English](./README.en.md)**
 
-Phase 1 (this release) includes local authentication, weekly menus, Jalali calendar, capacity/waitlist, QR meal tickets, serving, reports (Excel), audit logs, and Docker offline deployment.
+# سامانه رزرو غذا (درون‌سازمانی و آفلاین)
 
-## Demo credentials (development only)
+سامانه وب فارسی و راست‌چین برای رزرو غذای کارکنان. اجرا به‌صورت کامل روی شبکه داخلی سازمان، **بدون نیاز به اینترنت در زمان بهره‌برداری**.
 
-Do **not** use these passwords in production.
+فاز ۱: احراز هویت محلی، منوی هفتگی، تقویم شمسی، ظرفیت و فهرست انتظار، بلیت QR، تحویل غذا، گزارش اکسل، گزارش حسابداری، شعب، امتیازدهی غذا، و استقرار داکر آفلاین.
 
-| Role | Email | Password |
+## حمایت مالی
+
+اگر این پروژه برایتان مفید است، می‌توانید به این دو مجموعه کمک کنید:
+
+- [پرداخت آنلاین کمک — مؤسسه خیریه سپهر](https://sepehrcharity.com/fa/%d8%b1%d8%a7%d9%87-%d9%87%d8%a7%db%8c-%da%a9%d9%85%da%a9/%d9%be%d8%b1%d8%af%d8%a7%d8%ae%d8%aa-%d8%a2%d9%86%d9%84%d8%a7%db%8c%d9%86-%da%a9%d9%85%da%a9/)
+- [جمعیت امداد دانشجویی ـ مردمی امام علی (بچه‌های آسمان)](https://bachehayeaseman.org/)
+
+## اطلاعات ورود نمونه (فقط محیط آزمایش)
+
+در محیط عملیاتی از این رمزها استفاده نکنید.
+
+| نقش | ایمیل | رمز |
 | --- | --- | --- |
-| Admin | `admin@example.local` | `ChangeMe-Admin-0!` |
-| User | `user@example.local` | `ChangeMe-User-0!` |
-| Pending user | `pending@example.local` | `ChangeMe-Pending-0!` |
-| Branch admin (north only) | `branch@example.local` | `ChangeMe-Branch-0!` |
-| Accountant | `accountant@example.local` | `ChangeMe-Account-0!` |
+| مدیر | `admin@example.local` | `ChangeMe-Admin-0!` |
+| کاربر | `user@example.local` | `ChangeMe-User-0!` |
+| کاربر در انتظار تأیید | `pending@example.local` | `ChangeMe-Pending-0!` |
+| مدیر شعبه شمال | `branch@example.local` | `ChangeMe-Branch-0!` |
+| حسابدار | `accountant@example.local` | `ChangeMe-Account-0!` |
 
-Pending user must be approved in **مدیریت → کاربران**.
+کاربر در انتظار باید در **مدیریت → کاربران** تأیید شود.
 
-A sample lunch ticket token for serving tests: `demo-ticket-ali-lunch` (valid only while that reservation stays `RESERVED` and the lunch serving window is open).
+نمونه توکن بلیت ناهار برای آزمایش تحویل: `demo-ticket-ali-lunch` (فقط تا وقتی رزرو `RESERVED` باشد و پنجره تحویل ناهار باز باشد).
 
-## Local development
+## نصب و راه‌اندازی (توسعه)
 
-Requirements: Node.js 22, Docker, PostgreSQL 16 (or Docker Compose).
+نیازمندی‌ها: Node.js 22، Docker، PostgreSQL 16 (یا Docker Compose).
 
 ```bash
 cp .env.example .env
@@ -32,11 +43,11 @@ npx prisma db seed
 npm run dev
 ```
 
-Open `http://localhost:3000`.
+نشانی: `http://localhost:3000`.
 
-## Air-gapped deployment
+## استقرار آفلاین
 
-### 1. Build on a connected machine
+### ۱. ساخت روی ماشین دارای اینترنت
 
 ```bash
 npm ci
@@ -48,63 +59,85 @@ npm run build
 bash scripts/build-offline-bundle.sh 0.1.0
 ```
 
-The bundle `food-reservation-v0.1.0-offline.tar.gz` contains Docker images, compose file, env example, scripts, and docs.
+بسته `food-reservation-v0.1.0-offline.tar.gz` شامل ایمیج‌های داکر، فایل compose، نمونه env، اسکریپت‌ها و مستندات است.
 
-### 2. Transfer with approved offline media
+### ۲. انتقال با رسانه تأییدشده
 
-Copy the archive onto the isolated network. Do not expect `npm install`, `apt update`, or `docker pull` to work there.
+بایگانی را به شبکه ایزوله منتقل کنید. در آنجا انتظار `npm install`، `apt update` یا `docker pull` نداشته باشید.
 
-### 3. Import images
+### ۳. وارد کردن ایمیج‌ها
 
 ```bash
 tar -xzf food-reservation-v0.1.0-offline.tar.gz
 docker load -i docker-images/images.tar.gz
 ```
 
-### 4. Configure
+### ۴. پیکربندی
 
 ```bash
 cp .env.example .env
-# set SESSION_SECRET, POSTGRES_PASSWORD, APP_URL=http://food.company.local
-# production: SEED_DEMO=false
+# SESSION_SECRET، POSTGRES_PASSWORD و APP_URL=http://food.company.local را تنظیم کنید
+# در تولید: SEED_DEMO=false
 ```
 
-### 5–9. Start, migrate, admin, health, backup
+### ۵ تا ۹. اجرا، مهاجرت، مدیر، سلامت، پشتیبان
 
 ```bash
 docker compose up -d
-# entrypoint runs prisma migrate deploy
-# if SEED_DEMO=true, demo admin is created
+# entrypoint دستور prisma migrate deploy را اجرا می‌کند
+# اگر SEED_DEMO=true باشد، مدیر نمونه ساخته می‌شود
 curl http://food.company.local:3000/api/health
 bash scripts/backup.sh
 ```
 
-Create the first production admin with a strong password via seed disabled + SQL/Prisma, or temporarily seed then change passwords and disable demo users.
+برای مدیر عملیاتی از رمز قوی استفاده کنید؛ پس از سید موقت، رمزها را عوض کنید و کاربران دمو را غیرفعال کنید.
 
-Health checks hit only the local app and PostgreSQL. They never call the Internet.
+بررسی سلامت فقط به برنامه و PostgreSQL محلی می‌زند و به اینترنت وصل نمی‌شود.
 
-## Security notes
+## تنظیمات
 
-- Passwords are bcrypt-hashed.
-- Sessions are random tokens stored as SHA-256 hashes in PostgreSQL, httpOnly cookies.
-- Authorization is permission-based and enforced on the server.
-- Reservation and serving use row locks / conditional updates.
-- Historical reservation prices are snapshotted and never recomputed from current food prices.
-- Uploads are type-checked by magic bytes and stored on local disk (`/data/uploads`).
+از منوی مدیریت → تنظیمات: منطقه زمانی (پیش‌فرض `Asia/Tehran`)، روز شروع هفته، مهلت رزرو، مهلت لغو، فهرست انتظار، زمان وعده‌ها.
 
-## Branding
+## مدیریت غذا و منوی هفتگی
 
-Set `orgNameFa` in organization settings. Replace `public/` static assets as needed. Do not fork business logic for logos.
+غذا را تعریف کنید (حذف فیزیکی غذاهای دارای تاریخچه انجام نمی‌شود؛ غیرفعال می‌شوند). سپس برای هر روز و وعده، آیتم منو بسازید. قیمت روی آیتم منو و رزرو قفل تاریخی می‌شود.
 
-## Tests
+## رزرو و تحویل
+
+کاربر منوی شمسی هفته را می‌بیند و محل دریافت (شعبه) را انتخاب می‌کند. بلیت QR در «رزروهای من» است. اپراتور در «تحویل غذا» شعبه و سپس اسکن می‌کند و دکمه **تحویل غذا** را می‌زند. اسکن دوم پیام «این غذا قبلاً تحویل شده است.» را می‌دهد.
+
+## گزارش‌ها و پشتیبان‌گیری
+
+گزارش هزینه هفتگی، تعداد غذا و تحویل‌نشده با خروجی `.xlsx` آفلاین. حسابدار از «گزارش مالی» استفاده می‌کند. پشتیبان پایگاه و فایل‌های آپلود در `scripts/backup.sh`.
+
+## نکات امنیتی
+
+- رمز عبور با bcrypt ذخیره می‌شود.
+- نشست‌ها توکن تصادفی با هش SHA-256 در PostgreSQL و کوکی httpOnly هستند.
+- مجوزها سمت سرور اعمال می‌شوند.
+- رزرو و تحویل با قفل ردیف / به‌روزرسانی شرطی انجام می‌شود.
+- قیمت رزرو تاریخی است و از قیمت فعلی غذا دوباره محاسبه نمی‌شود.
+- آپلودها با بررسی magic bytes روی دیسک محلی (`/data/uploads`) ذخیره می‌شوند.
+
+## نام‌گذاری سازمانی
+
+نام نمایشی را در تنظیمات (`orgNameFa`) عوض کنید. در صورت نیاز فایل‌های `public/` را جایگزین کنید؛ منطق کسب‌وکار را برای لوگو فورک نکنید.
+
+## آزمایش‌ها
 
 ```bash
 npm test
 npm run offline:check
 ```
 
-Playwright (`npm run test:e2e`) expects the app to be running.
+Playwright (`npm run test:e2e`) انتظار دارد برنامه در حال اجرا باشد.
 
-## License
+## توسعه و مشارکت
+
+متن `CONTRIBUTING.md` و نسخه انگلیسی در [`README.en.md`](./README.en.md) را ببینید.
+
+## مجوز
 
 MIT
+
+</div>

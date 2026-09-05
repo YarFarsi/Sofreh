@@ -9,7 +9,7 @@ docker save "$APP_IMAGE" postgres:16-alpine | gzip > "dist/docker-images/images.
 cp docker-compose.yml dist/
 cp .env.example dist/
 cp LICENSE dist/ 2>/dev/null || true
-cp README.md README.fa.md dist/
+cp README.md README.en.md dist/
 cp -r scripts dist/
 cp -r docs dist/ 2>/dev/null || true
 cp -r prisma dist/database/prisma
